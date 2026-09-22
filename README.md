@@ -11,33 +11,56 @@ erzeugt daraus DATEV-kompatible MT940-Dateien.
 
 ## Funktionen
 
-- **CAMT.052 und CAMT.053** (Version 08) → MT940
+- **CAMT.052 / CAMT.053** (Version 08) → MT940
 - **Drag & Drop** von Dateien und Ordnern
-- **Copy & Paste** von Pfaden aus dem Explorer (Strg+V)
+- **Copy & Paste** von Pfaden (Strg+V)
 - **Stapelverarbeitung** ganzer Ordner
-- **Getrennte Ein-/Ausgabelisten** für bessere Übersicht
-- **Ausgabe** als `.txt` im DATEV-kompatiblen MT940-Format (ISO-8859-1)
-- **Ausgabeort** identisch mit dem Quellordner
+- **Getrennte Ein-/Ausgabelisten**
+- **DATEV-konforme Ausgabe** (ISO-8859-1, `.txt`)
+- **Ausgabeort**: gleicher Ordner wie Original
 
 ## Status
 
-🚧 **Phase 1 abgeschlossen**: CAMT → MT940
+✅ **v0.1.0** – CAMT → MT940 funktioniert, in DATEV getestet
 
-### Geplant (Phase 2)
-- [ ] CSV → MT940 mit Bank-spezifischen Templates
-- [ ] Template-Editor für eigene Bankformate
-- [ ] Erweiterte Fehlerprotokollierung
+### Geplant
+- [ ] CSV → MT940 mit Bank-Templates
+- [ ] PDF → MT940 (mittelfristig)
+- [ ] UI-Redesign
 
 ## Installation
 
 ### Für Anwender
 1. Aktuelle Version unter [Releases](../../releases) herunterladen
-2. ZIP-Datei entpacken
-3. `CamtToMT940.exe` starten
+2. `CamtToMT940.exe` starten
 
-**Voraussetzung**: Windows 10 oder 11
+**Voraussetzung**: Windows 10/11 (keine .NET-Installation nötig)
 
 ### Für Entwickler
 ```bash
 git clone https://github.com/TarekZaid/CamtToMT940.git
-cd CamtToMT940
+```
+CamtToMT940.sln in Visual Studio 2022 öffnen, F5.
+
+**Voraussetzungen**: .NET 8 SDK, Visual Studio 2022
+
+## Verwendung
+
+1. Dateien per Drag & Drop, „Ordner auswählen" oder Strg+V hinzufügen
+2. „Konvertieren" klicken
+3. .txt-Dateien liegen neben den Originalen
+4. In DATEV importieren
+
+## Bekannte Einschränkungen
+
+- Getestet mit CAMT.052/053 Version 08 (Volksbank, Bundesbank)
+- Andere CAMT-Versionen (V02) möglicherweise nicht unterstützt
+- CSV-Import noch nicht verfügbar
+
+## Feedback
+
+Fehlerberichte und Verbesserungsvorschläge bitte als Issue.
+
+## Lizenz
+
+MIT
