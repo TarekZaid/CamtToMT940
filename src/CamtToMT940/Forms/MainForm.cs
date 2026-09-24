@@ -18,7 +18,6 @@ namespace CamtToMT940
         {
             InitializeComponent();
             WireUpEvents();
-            TestParser();
         }
 
         /// <summary>
@@ -277,26 +276,6 @@ namespace CamtToMT940
         private void UpdateButtonState()
         {
             btnConvert.Enabled = lstFiles.Items.Count > 0;
-        }
-
-        private void TestParser()
-        {
-            var parser = new Services.CamtParser();
-            var statements = parser.Parse(@"D:\GitHub\CamtToMT940\testdata\2026_C52_VR.xml");
-
-            foreach (var stmt in statements)
-            {
-                System.Diagnostics.Debug.WriteLine($"IBAN: {stmt.Iban}");
-                System.Diagnostics.Debug.WriteLine($"Anfangssaldo: {stmt.OpeningBalance} {stmt.Currency} ({stmt.OpeningDate})");
-                System.Diagnostics.Debug.WriteLine($"Endsaldo: {stmt.ClosingBalance} {stmt.Currency}");
-                System.Diagnostics.Debug.WriteLine($"Anzahl Buchungen: {stmt.Transactions.Count}");
-
-                foreach (var tx in stmt.Transactions)
-                {
-                    var partner = tx.IsCredit ? tx.DebtorName : tx.CreditorName;
-                    System.Diagnostics.Debug.WriteLine($"  {tx.BookingDate:yyyy-MM-dd} | {tx.Amount} | {(tx.IsCredit ? "CRDT" : "DBIT")} | {partner}");
-                }
-            }
         }
     }
 }
