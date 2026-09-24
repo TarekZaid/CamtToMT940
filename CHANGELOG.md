@@ -11,6 +11,16 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 - PDF → MT940
 - UI-Redesign
 
+## [0.1.1] – 2026-09-24
+
+### Behoben
+- Programm startet jetzt zuverlässig auf Windows 10 und 11
+- Auslieferung als eigenständige `.exe` (Self-Contained, keine .NET-Installation nötig)
+- Absturz beim Start auf Rechnern ohne lokalen `testdata`-Ordner behoben
+
+### Entfernt
+- Debug-Methode `TestParser()` aus `MainForm`
+
 ## [0.1.0] – 2026-09-22
 
 ### Hinzugefügt

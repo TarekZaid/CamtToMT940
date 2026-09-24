@@ -4,10 +4,7 @@ Ein Windows-Tool zur Konvertierung von Bankauszügen ins MT940-Format für den D
 
 ## Motivation
 
-Viele Banken stellen ihre Kontoauszüge auf das moderne CAMT-Format (ISO 20022) um. 
-DATEV und viele Buchhaltungsprogramme erwarten jedoch weiterhin das klassische 
-MT940-Format. Dieses Tool schließt die Lücke: Es liest CAMT-Dateien ein und 
-erzeugt daraus DATEV-kompatible MT940-Dateien.
+Banken stellen auf CAMT (ISO 20022) um, DATEV erwartet MT940. Dieses Tool schließt die Lücke.
 
 ## Funktionen
 
@@ -21,7 +18,7 @@ erzeugt daraus DATEV-kompatible MT940-Dateien.
 
 ## Status
 
-✅ **v0.1.0** – CAMT → MT940 funktioniert, in DATEV getestet
+✅ **v0.1.1** – CAMT → MT940 funktioniert, in DATEV getestet
 
 ### Geplant
 - [ ] CSV → MT940 mit Bank-Templates
@@ -32,9 +29,12 @@ erzeugt daraus DATEV-kompatible MT940-Dateien.
 
 ### Für Anwender
 1. Aktuelle Version unter [Releases](../../releases) herunterladen
-2. `CamtToMT940.exe` starten
+2. `CamtToMT940.exe` per Doppelklick starten
 
-**Voraussetzung**: Windows 10/11 (keine .NET-Installation nötig)
+**Voraussetzung**: Windows 10/11 – keine .NET-Installation nötig
+
+**Hinweis**: Beim ersten Start kann Windows SmartScreen eine Warnung anzeigen. 
+Klicke auf „Weitere Informationen" → „Trotzdem ausführen".
 
 ### Für Entwickler
 ```bash
