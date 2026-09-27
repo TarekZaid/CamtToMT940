@@ -1,5 +1,7 @@
+using CamtToMT940.Forms;
 using System;
 using System.IO;
+using System.Text;
 using System.Windows.Forms;
 
 namespace CamtToMT940
@@ -9,6 +11,9 @@ namespace CamtToMT940
         [STAThread]
         static void Main()
         {
+            // Codepages (Windows-1252, ISO-8859-1 etc.) registrieren
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
             // Exception-Logging einrichten
             AppDomain.CurrentDomain.FirstChanceException += (sender, e) =>
             {
