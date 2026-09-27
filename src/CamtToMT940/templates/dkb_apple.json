@@ -1,0 +1,32 @@
+{
+  "name": "DKB (Apple / Umsatzliste)",
+  "encoding": "UTF-8",
+  "delimiter": ";",
+  "quoteChar": "\"",
+  "headerRows": 6,
+  "dateFormat": "dd.MM.yy",
+  "amountFormat": "german",
+  "amountSignSource": "signInAmount",
+  "defaultGvc": "166",
+  "defaultBookingKey": null,
+  "sortTransactionsAscending": true,
+  "ownIbanRow": 1,
+  "ownIbanColumn": 1,
+  "closingBalanceRow": 3,
+  "closingBalanceColumn": 1,
+  "openingBalanceRow": null,
+  "openingBalanceColumn": null,
+  "columns": {
+    "bookingDate": 0,
+    "valueDate": 1,
+    "status": 2,
+    "counterpartyName1": 3,
+    "counterpartyName2": 4,
+    "remittanceInfo": 5,
+    "bookingText": 6,
+    "amount": 8,
+    "creditorId": 9,
+    "mandateId": 10,
+    "customerRef": 11
+  }
+}

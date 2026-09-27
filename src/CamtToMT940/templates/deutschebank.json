@@ -1,0 +1,33 @@
+{
+  "name": "Deutsche Bank",
+  "encoding": "UTF-8",
+  "delimiter": ";",
+  "quoteChar": "\"",
+  "headerRows": 8,
+  "dateFormat": "dd.MM.yyyy",
+  "amountFormat": "german",
+  "amountSignSource": "signInAmount",
+  "defaultGvc": "166",
+  "defaultBookingKey": null,
+  "sortTransactionsAscending": true,
+  "ownIbanRow": 2,
+  "ownIbanColumn": 2,
+  "openingBalanceRow": 5,
+  "openingBalanceColumn": 4,
+  "closingBalanceRow": -1,
+  "closingBalanceColumn": 4,
+  "columns": {
+    "bookingDate": 0,
+    "valueDate": 1,
+    "bookingText": 2,
+    "counterpartyName1": 3,
+    "remittanceInfo": 4,
+    "counterpartyIban": 5,
+    "counterpartyBic": 6,
+    "customerRef": 7,
+    "mandateId": 8,
+    "creditorId": 9,
+    "amount": 11,
+    "currency": 17
+  }
+}
