@@ -1,0 +1,20 @@
+﻿{
+  "name": "HypoVereinsbank",
+  "encoding": "utf-16",
+  "delimiter": ";",
+  "quoteChar": "\"",
+  "headerRows": 1,
+  "dateFormat": "dd.MM.yyyy",
+  "amountFormat": "german",
+  "amountSignSource": "signInAmount",
+  "defaultGvc": "166",
+  "sortTransactionsAscending": true,
+  "ownAccountNumberDataColumn": 0,
+  "columns": {
+    "bookingDate": 1,
+    "valueDate": 2,
+    "remittanceInfo": 3,
+    "amount": 4,
+    "currency": 5
+  }
+}
