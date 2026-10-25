@@ -1,0 +1,24 @@
+﻿{
+  "name": "ING DiBa",
+  "encoding": "UTF-8",
+  "delimiter": ";",
+  "quoteChar": "\"",
+  "headerRows": 14,
+  "dateFormat": "dd.MM.yyyy",
+  "amountFormat": "german",
+  "amountSignSource": "signInAmount",
+  "defaultGvc": "166",
+  "sortTransactionsAscending": true,
+  "ownIbanRow": 2,
+  "ownIbanColumn": 1,
+  "closingBalanceDataColumn": 5,
+  "columns": {
+    "bookingDate": 0,
+    "valueDate": 1,
+    "counterpartyName": 2,
+    "bookingText": 3,
+    "remittanceInfo": 4,
+    "amount": 7,
+    "currency": 8
+  }
+}

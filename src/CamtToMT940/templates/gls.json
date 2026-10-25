@@ -1,0 +1,27 @@
+﻿{
+  "name": "GLS Bank",
+  "encoding": "UTF-8",
+  "delimiter": ";",
+  "quoteChar": "\"",
+  "headerRows": 1,
+  "dateFormat": "dd.MM.yyyy",
+  "amountFormat": "german",
+  "amountSignSource": "signInAmount",
+  "defaultGvc": "166",
+  "sortTransactionsAscending": true,
+  "ownIbanDataColumn": 1,
+  "closingBalanceDataColumn": 13,
+  "columns": {
+    "bookingDate": 4,
+    "valueDate": 5,
+    "counterpartyName": 6,
+    "counterpartyIban": 7,
+    "counterpartyBic": 8,
+    "bookingText": 9,
+    "remittanceInfo": 10,
+    "amount": 11,
+    "currency": 12,
+    "creditorId": 16,
+    "mandateId": 17
+  }
+}

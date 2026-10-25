@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Numerics;
+using System.Text.RegularExpressions;
 using CamtToMT940.Models;
 
 namespace CamtToMT940.Services
@@ -57,11 +59,24 @@ namespace CamtToMT940.Services
 
                 // 4. Buchungen mappen
                 var transactions = new List<BankTransaction>();
+
+                // Für closingBalanceDataColumn: Rohzeile mit dem zeitlich größten BookingDate merken.
+                string[]? latestRow = null;
+                DateTime latestBookingDate = DateTime.MinValue;
+
                 foreach (var row in rows)
                 {
                     var tx = _mapper.Map(row, template);
-                    if (tx != null)
+                    if (tx == null)
+                        continue;
+
                         transactions.Add(tx);
+
+                    if (tx.BookingDate > latestBookingDate)
+                    {
+                        latestBookingDate = tx.BookingDate;
+                        latestRow = row;
+                    }
                 }
 
                 if (transactions.Count == 0)
@@ -72,17 +87,42 @@ namespace CamtToMT940.Services
                 if (template.SortTransactionsAscending)
                     transactions = transactions.OrderBy(t => t.BookingDate).ToList();
 
-                // 6. Anfangssaldo berechnen, falls nicht aus Header vorhanden
+                // 5b. Endsaldo aus Datenzeile lesen, falls nicht im Header gefunden.
+                if (closingBalance == null
+                    && template.ClosingBalanceDataColumn.HasValue
+                    && latestRow != null)
+                {
+                    var col = template.ClosingBalanceDataColumn.Value;
+                    if (col >= 0 && col < latestRow.Length)
+                    {
+                        var parsed = ParseAmount(latestRow[col], template.AmountFormat);
+                        if (parsed.HasValue)
+                            closingBalance = parsed;
+                    }
+                }
+
+                // 6. Salden bestimmen
+                var sum = transactions.Sum(t => t.IsCredit ? t.Amount : -t.Amount);
+
                 if (openingBalance == null && closingBalance != null)
                 {
                     var sum = transactions.Sum(t => t.IsCredit ? t.Amount : -t.Amount);
                     openingBalance = closingBalance.Value - sum;
                 }
+                else if (openingBalance == null && closingBalance == null)
+                {
+                    openingBalance = 0m;
+                    closingBalance = sum;
+                }
+                else if (openingBalance != null && closingBalance == null)
+                {
+                    closingBalance = openingBalance.Value + sum;
+                }
 
                 // 7. BankStatement bauen
                 var statement = new BankStatement
                 {
-                    Iban = ownIban ?? "",
+                    Iban = ownIban,
                     OwnerName = "",
                     Currency = transactions[0].Currency,
                     OpeningDate = transactions.First().ValueDate,
@@ -101,10 +141,14 @@ namespace CamtToMT940.Services
                 {
                     $"Template:         {template.Name}",
                     $"Header-Zeilen:    {template.HeaderRows}",
-                    $"Eigene IBAN:      {ownIban ?? "(nicht gelesen)"}",
-                    $"Anfangssaldo:     {(openingBalance.HasValue ? openingBalance.Value.ToString("0.00") : "(nicht gelesen)")}",
-                    $"Endsaldo:         {(closingBalance.HasValue ? closingBalance.Value.ToString("0.00") : "(nicht gelesen)")}",
-                    $"Summe Buchungen:  {sumCheck.ToString("0.00")}",
+                    $"Eigene IBAN:      {ownIban} {ibanSource}",
+                    $"Anfangssaldo:     {(openingBalance.HasValue ? openingBalance.Value.ToString("0.00") : "(nicht gelesen)")}" +
+                        (openingBalanceOverride.HasValue ? " [aus UI]" : ""),
+                    $"Endsaldo:         {(closingBalance.HasValue ? closingBalance.Value.ToString("0.00") : "(nicht gelesen)")}" +
+                        (closingBalanceOverride.HasValue ? " [aus UI]" : "")
+                        + (template.ClosingBalanceDataColumn.HasValue && latestRow != null && !closingBalanceOverride.HasValue
+                            ? " [aus Datenzeile]" : ""),
+                    $"Summe Buchungen:  {sum.ToString("0.00")}",
                     $"Anzahl Buchungen: {transactions.Count}",
                     "",
                     "Buchungen:",
@@ -114,9 +158,14 @@ namespace CamtToMT940.Services
                 var debugLines = new List<string>(File.ReadAllLines(debugPath));
                 foreach (var t in transactions)
                 {
-                    debugLines.Add($"{t.BookingDate:yyyy-MM-dd} | {(t.IsCredit ? "+" : "-")}{t.Amount,10:0.00} | {t.GetCounterpartyName()}");
+                    var name = t.GetCounterpartyName() ?? "";
+                    var swvz = t.RemittanceInfo ?? "";
+                    if (swvz.Length > 60) swvz = swvz.Substring(0, 57) + "...";
+                    debugLines.Add($"{t.BookingDate:yyyy-MM-dd} | {(t.IsCredit ? "+" : "-")}{t.Amount,10:0.00} | {name} | {swvz}");
                 }
                 File.WriteAllLines(debugPath, debugLines);
+#endif
+
                 // 8. MT940 schreiben
                 var mt940 = _writer.Write(statement);
                 File.WriteAllText(outputPath, mt940, _writer.Encoding);
@@ -160,9 +209,13 @@ namespace CamtToMT940.Services
             string amountFormat)
         {
             var raw = ReadHeaderField(lines, row, col);
-            if (raw == null) return null;
+            return ParseAmount(raw, amountFormat);
+        }
 
-            // Euro-Zeichen, geschützte Leerzeichen und einfache Leerzeichen entfernen
+        private decimal? ParseAmount(string? raw, string amountFormat)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+
             var cleaned = new string(raw
                 .Where(c => char.IsDigit(c) || c == '.' || c == ',' || c == '-')
                 .ToArray());
