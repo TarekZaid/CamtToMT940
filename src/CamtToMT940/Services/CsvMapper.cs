@@ -55,7 +55,6 @@ namespace CamtToMT940.Services
             tx.AdditionalInfo = GetField(row, template.Columns.AdditionalInfo);
 
             // Geschäftspartner
-            // Zahler - Empfänger (Geld fließt von links nach rechts)
             var name = FirstNonEmpty(
                 GetField(row, template.Columns.CounterpartyName),
                 CombineNames(
@@ -69,6 +68,12 @@ namespace CamtToMT940.Services
 
             var iban = GetField(row, template.Columns.CounterpartyIban);
             var bic = GetField(row, template.Columns.CounterpartyBic);
+
+            // Nur als BIC verwenden, wenn es wie eine BIC aussieht.
+            // Sparkassen-CSV enthält in der BIC-Spalte teils reine BLZ (8 Ziffern).
+            if (!LooksLikeBic(bic))
+                bic = null;
+
             if (isCredit)
             {
                 tx.DebtorIban = iban;
@@ -180,6 +185,21 @@ namespace CamtToMT940.Services
             if (string.IsNullOrWhiteSpace(second)) return first;
             if (first.Equals(second, StringComparison.OrdinalIgnoreCase)) return first;
             return $"{first} - {second}";
+        }
+
+        /// Prüft grob, ob der Wert wie eine BIC aussieht:
+        private static bool LooksLikeBic(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var v = value.Trim().ToUpperInvariant();
+            if (v.Length != 8 && v.Length != 11) return false;
+            for (int i = 0; i < 4; i++)
+                if (!char.IsLetter(v[i])) return false;
+            for (int i = 4; i < 6; i++)
+                if (!char.IsLetter(v[i])) return false;
+            for (int i = 6; i < v.Length; i++)
+                if (!char.IsLetterOrDigit(v[i])) return false;
+            return true;
         }
     }
 }

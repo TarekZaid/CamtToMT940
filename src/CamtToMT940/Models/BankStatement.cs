@@ -38,28 +38,33 @@ namespace CamtToMT940.Models
         public string? CreditorIban { get; set; }
         public string? CreditorBic { get; set; }
 
-        public string? RemittanceInfo { get; set; }   // Ustrd
-        public string? AdditionalInfo { get; set; }    // AddtlNtryInf
+        public string? RemittanceInfo { get; set; }
+        public string? AdditionalInfo { get; set; }
 
-        public string? BookingText { get; set; }       // z.B. "Überweisungsgutschr."
-        public string? TransactionCode { get; set; }   // z.B. "NTRF+166+00931"
+        public string? BookingText { get; set; }
+        public string? TransactionCode { get; set; }
+
+        // --- Overrides, die der Mapper setzt (z.B. aus CSV-Template) ---
 
         /// <summary>
-    /// Liefert den Namen des Geschäftspartners (Zahler bei Gutschrift, Empfänger bei Lastschrift).
-    /// </summary>
-    public string? GetCounterpartyName()
-        => IsCredit ? DebtorName : CreditorName;
+        /// Erzwingt einen bestimmten GVC für ?00 (z.B. "166").
+        /// </summary>
+        public string? GvcOverride { get; set; }
 
-    /// <summary>
-    /// Liefert die IBAN des Geschäftspartners.
-    /// </summary>
-    public string? GetCounterpartyIban()
-        => IsCredit ? DebtorIban : CreditorIban;
+        /// <summary>
+        /// Erzwingt einen bestimmten Buchungsschlüssel für ?10 (z.B. "931").
+        /// </summary>
+        public string? BookingKeyOverride { get; set; }
 
-    /// <summary>
-    /// Liefert den BIC des Geschäftspartners.
-    /// </summary>
-    public string? GetCounterpartyBic()
-        => IsCredit ? DebtorBic : CreditorBic;
+        // --- Hilfsmethoden ---
+
+        public string? GetCounterpartyName()
+            => IsCredit ? DebtorName : CreditorName;
+
+        public string? GetCounterpartyIban()
+            => IsCredit ? DebtorIban : CreditorIban;
+
+        public string? GetCounterpartyBic()
+            => IsCredit ? DebtorBic : CreditorBic;
     }
 }

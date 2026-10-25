@@ -18,7 +18,12 @@ namespace CamtToMT940.Services
         private readonly CultureInfo _invariant = CultureInfo.InvariantCulture;
 
         public ConversionResult Convert(string sourcePath, CsvTemplate template,
-            Func<string, bool>? onConflict = null)
+            Func<string, bool>? onConflict = null,
+            string? ibanOverride = null,
+            string? blzOverride = null,
+            string? kontoOverride = null,
+            decimal? openingBalanceOverride = null,
+            decimal? closingBalanceOverride = null)
         {
             try
             {
@@ -57,6 +62,70 @@ namespace CamtToMT940.Services
                 if (rows.Count == 0)
                     return ConversionResult.Fail(sourcePath, "Keine Datenzeilen gefunden.");
 
+                // 3b. Eigene IBAN aus Datenzeile lesen, falls nicht im Header gefunden
+                if (string.IsNullOrWhiteSpace(ownIban) && template.OwnIbanDataColumn.HasValue)
+                {
+                    var col = template.OwnIbanDataColumn.Value;
+                    if (col >= 0 && col < rows[0].Length)
+                    {
+                        var candidate = rows[0][col]?.Trim().Trim('"').Trim();
+                        if (!string.IsNullOrWhiteSpace(candidate))
+                            ownIban = candidate;
+                    }
+                }
+
+                // 3c. Eigene IBAN aus Dateinamen lesen, falls immer noch nicht gefunden
+                if (string.IsNullOrWhiteSpace(ownIban) && template.OwnIbanFromFileName)
+                {
+                    ownIban = ExtractIbanFromFileName(baseName);
+                }
+
+                // 3d. IBAN aus UI-Override (höchste Priorität, überschreibt alles)
+                string ibanSource = "(nicht gelesen)";
+                if (!string.IsNullOrWhiteSpace(ibanOverride))
+                {
+                    ownIban = ibanOverride.Trim();
+                    ibanSource = "[aus UI]";
+                }
+
+                // 3e. IBAN aus BLZ + Kontonummer (UI bzw. Datenzeile) berechnen
+                if (string.IsNullOrWhiteSpace(ownIban) && !string.IsNullOrWhiteSpace(blzOverride))
+                {
+                    string? konto = null;
+
+                    if (template.OwnAccountNumberDataColumn.HasValue)
+                    {
+                        var col = template.OwnAccountNumberDataColumn.Value;
+                        if (col >= 0 && col < rows[0].Length)
+                            konto = rows[0][col]?.Trim().Trim('"').Trim();
+                    }
+
+                    if (string.IsNullOrWhiteSpace(konto))
+                        konto = kontoOverride?.Trim();
+
+                    if (!string.IsNullOrWhiteSpace(konto))
+                    {
+                        try
+                        {
+                            ownIban = BuildIbanFromBlzKonto(blzOverride, konto);
+                            ibanSource = "[aus BLZ+Konto berechnet]";
+                        }
+                        catch (ArgumentException ex)
+                        {
+                            return ConversionResult.Fail(sourcePath,
+                                $"IBAN konnte nicht berechnet werden: {ex.Message}");
+                        }
+                    }
+                }
+
+                // 3f. Wenn immer noch keine IBAN: harter Fehler (DATEV braucht :25:)
+                if (string.IsNullOrWhiteSpace(ownIban))
+                {
+                    return ConversionResult.Fail(sourcePath,
+                        "IBAN fehlt. Bitte im CSV-Tab unter 'IBAN' oder 'BLZ' + 'Kontonr.' eintragen " +
+                        "— ohne diese Angaben kann DATEV die Datei nicht zuordnen.");
+                }
+
                 // 4. Buchungen mappen
                 var transactions = new List<BankTransaction>();
 
@@ -70,7 +139,7 @@ namespace CamtToMT940.Services
                     if (tx == null)
                         continue;
 
-                        transactions.Add(tx);
+                    transactions.Add(tx);
 
                     if (tx.BookingDate > latestBookingDate)
                     {
@@ -101,12 +170,17 @@ namespace CamtToMT940.Services
                     }
                 }
 
+                // 5c. UI-Overrides für Salden (überschreiben Datei-Werte)
+                if (openingBalanceOverride.HasValue)
+                    openingBalance = openingBalanceOverride.Value;
+                if (closingBalanceOverride.HasValue)
+                    closingBalance = closingBalanceOverride.Value;
+
                 // 6. Salden bestimmen
                 var sum = transactions.Sum(t => t.IsCredit ? t.Amount : -t.Amount);
 
                 if (openingBalance == null && closingBalance != null)
                 {
-                    var sum = transactions.Sum(t => t.IsCredit ? t.Amount : -t.Amount);
                     openingBalance = closingBalance.Value - sum;
                 }
                 else if (openingBalance == null && closingBalance == null)
@@ -134,8 +208,8 @@ namespace CamtToMT940.Services
                     Transactions = transactions
                 };
 
-                // --- Debug: Salden und Summe prüfen ---
-                var sumCheck = transactions.Sum(t => t.IsCredit ? t.Amount : -t.Amount);
+#if DEBUG
+                // --- Debug ---
                 var debugPath = Path.Combine(directory, baseName + "_debug.txt");
                 File.WriteAllLines(debugPath, new[]
                 {
@@ -182,15 +256,10 @@ namespace CamtToMT940.Services
         // Header-Parsing
         // --------------------------------------------------------------------
 
-        /// <summary>
-        /// Liest ein einzelnes Feld aus dem Header.
-        /// row = -1 bedeutet "letzte Zeile".
-        /// </summary>
         private string? ReadHeaderField(string[] lines, int? row, int? col)
         {
             if (row == null || col == null) return null;
 
-            // -1 = letzte Zeile
             var actualRow = row.Value < 0 ? lines.Length + row.Value : row.Value;
             if (actualRow < 0 || actualRow >= lines.Length) return null;
 
@@ -201,10 +270,6 @@ namespace CamtToMT940.Services
             return string.IsNullOrWhiteSpace(value) ? null : value;
         }
 
-        /// <summary>
-        /// Liest einen Betrag aus dem Header. Behandelt Formate wie
-        /// "1.976,81 €" und "€ 3.864,03" und "599,21".
-        /// </summary>
         private decimal? ReadHeaderAmount(string[] lines, int? row, int? col,
             string amountFormat)
         {
@@ -225,11 +290,48 @@ namespace CamtToMT940.Services
             if (decimal.TryParse(cleaned, NumberStyles.Any, culture, out var value))
                 return value;
 
-            // Fallback: "1.234,56" hart parsen
             var fallback = cleaned.Replace(".", "").Replace(",", ".");
             return decimal.TryParse(fallback, NumberStyles.Any, _invariant, out value)
                 ? value
                 : null;
+        }
+
+        private static string? ExtractIbanFromFileName(string fileNameWithoutExtension)
+        {
+            if (string.IsNullOrWhiteSpace(fileNameWithoutExtension))
+                return null;
+
+            var match = Regex.Match(fileNameWithoutExtension, @"DE\d{20}\b");
+            return match.Success ? match.Value : null;
+        }
+
+        /// <summary>
+        /// Baut aus BLZ (8 Ziffern) und Kontonummer (max. 10 Ziffern) eine
+        /// deutsche IBAN. Verwendet Mod-97 mit BigInteger (24-stellige Zahl).
+        /// </summary>
+        private static string BuildIbanFromBlzKonto(string blz, string konto)
+        {
+            blz = new string(blz.Where(char.IsDigit).ToArray());
+            konto = new string(konto.Where(char.IsDigit).ToArray());
+
+            if (blz.Length != 8)
+                throw new ArgumentException(
+                    $"BLZ muss genau 8 Ziffern haben (eingegeben: '{blz}', {blz.Length} Ziffern).");
+
+            if (konto.Length == 0)
+                throw new ArgumentException("Kontonummer ist leer.");
+
+            if (konto.Length > 10)
+                throw new ArgumentException(
+                    $"Kontonummer darf max. 10 Ziffern haben (eingegeben: '{konto}', {konto.Length} Ziffern).");
+
+            var bban = blz + konto.PadLeft(10, '0');
+            var numeric = bban + "131400";   // DE = 13, 00 = 00
+
+            var rest = BigInteger.Parse(numeric) % 97;
+            var pruefziffer = 98 - (int)rest;
+
+            return $"DE{pruefziffer:D2}{bban}";
         }
     }
 }

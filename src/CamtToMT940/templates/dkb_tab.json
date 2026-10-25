@@ -1,0 +1,27 @@
+{
+  "name": "DKB (Tab-getrennt)",
+  "encoding": "UTF-8",
+  "delimiter": "\t",
+  "quoteChar": "\"",
+  "headerRows": 1,
+  "dateFormat": "dd.MM.yyyy",
+  "amountFormat": "german",
+  "amountSignSource": "signInAmount",
+  "defaultGvc": "166",
+  "defaultBookingKey": null,
+  "sortTransactionsAscending": true,
+  "ownIbanFromFileName": true,
+  "columns": {
+    "bookingDate": 0,
+    "valueDate": 1,
+    "status": 2,
+    "counterpartyName1": 3,
+    "counterpartyName2": 4,
+    "remittanceInfo": 5,
+    "bookingText": 6,
+    "amount": 8,
+    "creditorId": 9,
+    "mandateId": 10,
+    "customerRef": 11
+  }
+}

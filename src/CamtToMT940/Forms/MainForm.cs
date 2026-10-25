@@ -1,5 +1,6 @@
-using System;
+Ôªøusing System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -21,7 +22,6 @@ namespace CamtToMT940.Forms
         {
             InitializeComponent();
 
-            // Templates laden (aus Ordner neben der .exe bzw. aus Projektordner)
             _templateStore = new CsvTemplateStore();
             LoadTemplates();
 
@@ -64,9 +64,11 @@ namespace CamtToMT940.Forms
             lstCsvFiles.DragDrop += MainForm_DragDrop;
             lstCsvFiles.SelectedIndexChanged += (s, e) => UpdateCsvButtonState();
 
-            // Strg+V
-            this.KeyPreview = true;
-            this.KeyDown += MainForm_KeyDown;
+            // Rechtsklick-Einf√ºgen f√ºr die Eingabe-ListBoxen
+            var pasteMenu = new ContextMenuStrip();
+            pasteMenu.Items.Add("Einf√ºgen (Strg+V)", null, (s, e) => PasteFromClipboard());
+            lstFiles.ContextMenuStrip = pasteMenu;
+            lstCsvFiles.ContextMenuStrip = pasteMenu;
         }
 
         // --------------------------------------------------------------------
@@ -89,15 +91,12 @@ namespace CamtToMT940.Forms
             var skipped = 0;
             var errors = new List<string>();
 
-            lstOutput.Items.Clear();
-
             foreach (var input in inputs)
             {
                 var result = _camtConverter.Convert(input, HandleConflict);
 
                 if (result.Success)
                 {
-                    lstOutput.Items.Add(Path.GetFileName(result.OutputPath));
                     succeeded++;
                 }
                 else if (result.ErrorMessage == "Vom Benutzer abgebrochen.")
@@ -111,7 +110,7 @@ namespace CamtToMT940.Forms
                 }
             }
 
-            UpdateStatus($"CAMT: {succeeded} konvertiert, {skipped} ¸bersprungen, {failed} fehlgeschlagen.");
+            UpdateStatus($"CAMT: {succeeded} konvertiert, {skipped} √ºbersprungen, {failed} fehlgeschlagen.");
             ShowErrors(errors);
         }
 
@@ -130,7 +129,7 @@ namespace CamtToMT940.Forms
             var templateName = cmbTemplates.SelectedItem as string;
             if (string.IsNullOrWhiteSpace(templateName) || templateName.StartsWith("("))
             {
-                MessageBox.Show("Bitte ein Bank-Template ausw‰hlen.",
+                MessageBox.Show("Bitte ein Bank-Template ausw√§hlen.",
                     "Kein Template", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -143,6 +142,13 @@ namespace CamtToMT940.Forms
                 return;
             }
 
+            // Optionale manuelle Angaben (leer = nicht verwendet)
+            string? iban = string.IsNullOrWhiteSpace(txtIban.Text) ? null : txtIban.Text.Trim();
+            string? blz = string.IsNullOrWhiteSpace(txtBlz.Text) ? null : txtBlz.Text.Trim();
+            string? konto = string.IsNullOrWhiteSpace(txtKonto.Text) ? null : txtKonto.Text.Trim();
+            decimal? openingOverride = ParseDecimalOrNull(txtOpening.Text);
+            decimal? closingOverride = ParseDecimalOrNull(txtClosing.Text);
+
             var inputs = lstCsvFiles.Items.Cast<FileEntry>()
                 .Select(x => x.FullPath).ToList();
 
@@ -151,15 +157,13 @@ namespace CamtToMT940.Forms
             var skipped = 0;
             var errors = new List<string>();
 
-            lstCsvOutput.Items.Clear();
-
             foreach (var input in inputs)
             {
-                var result = _csvConverter.Convert(input, template, HandleConflict);
+                var result = _csvConverter.Convert(input, template, HandleConflict,
+                    iban, blz, konto, openingOverride, closingOverride);
 
                 if (result.Success)
                 {
-                    lstCsvOutput.Items.Add(Path.GetFileName(result.OutputPath));
                     succeeded++;
                 }
                 else if (result.ErrorMessage == "Vom Benutzer abgebrochen.")
@@ -173,19 +177,19 @@ namespace CamtToMT940.Forms
                 }
             }
 
-            UpdateStatus($"CSV ({templateName}): {succeeded} konvertiert, {skipped} ¸bersprungen, {failed} fehlgeschlagen.");
+            UpdateStatus($"CSV ({templateName}): {succeeded} konvertiert, {skipped} √ºbersprungen, {failed} fehlgeschlagen.");
             ShowErrors(errors);
         }
 
         // --------------------------------------------------------------------
-        // Dateiauswahl (gemeinsam f¸r beide Tabs)
+        // Dateiauswahl (gemeinsam f√ºr beide Tabs)
         // --------------------------------------------------------------------
 
         private void SelectFolderFor(ListBox target, string[] allowedExtensions)
         {
             using var dialog = new FolderBrowserDialog
             {
-                Description = "Ordner mit zu konvertierenden Dateien ausw‰hlen",
+                Description = "Ordner mit zu konvertierenden Dateien ausw√§hlen",
                 ShowNewFolderButton = false
             };
 
@@ -232,7 +236,7 @@ namespace CamtToMT940.Forms
                 }
             }
 
-            UpdateStatus($"{added} Datei(en) hinzugef¸gt, {skipped} ¸bersprungen.");
+            UpdateStatus($"{added} Datei(en) hinzugef√ºgt, {skipped} √ºbersprungen.");
             UpdateCamtButtonState();
             UpdateCsvButtonState();
         }
@@ -267,47 +271,75 @@ namespace CamtToMT940.Forms
             var paths = (string[]?)e.Data.GetData(DataFormats.FileDrop);
             if (paths == null) return;
 
-            // Bestimmen, in welchen Tab die Dateien kommen
-            // ? wir f¸gen sie in beide mˆglichen Listen ein, wenn die Extension passt
-            AddPathsTo(lstFiles, paths, CamtExtensions);
-            AddPathsTo(lstCsvFiles, paths, CsvExtensions);
+            AddPathsToBothLists(paths);
         }
 
         // --------------------------------------------------------------------
-        // Strg+V
+        // Einf√ºgen (Strg+V und Rechtsklick)
         // --------------------------------------------------------------------
 
-        private void MainForm_KeyDown(object? sender, KeyEventArgs e)
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (e.Control && e.KeyCode == Keys.V)
+            if (keyData == (Keys.Control | Keys.V))
             {
-                if (Clipboard.ContainsText())
-                {
-                    var paths = Clipboard.GetText()
-                        .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(p => p.Trim().Trim('"'))
-                        .Where(p => !string.IsNullOrWhiteSpace(p))
-                        .ToArray();
-
-                    if (paths.Length > 0)
-                    {
-                        AddPathsTo(lstFiles, paths, CamtExtensions);
-                        AddPathsTo(lstCsvFiles, paths, CsvExtensions);
-                    }
-                }
-                e.Handled = true;
+                PasteFromClipboard();
+                return true;
             }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private void PasteFromClipboard()
+        {
+            var paths = new List<string>();
+
+            if (Clipboard.ContainsFileDropList())
+            {
+                foreach (var file in Clipboard.GetFileDropList())
+                {
+                    if (!string.IsNullOrWhiteSpace(file))
+                        paths.Add(file);
+                }
+            }
+
+            if (Clipboard.ContainsText())
+            {
+                var textPaths = Clipboard.GetText()
+                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(p => p.Trim().Trim('"'))
+                    .Where(p => !string.IsNullOrWhiteSpace(p));
+
+                paths.AddRange(textPaths);
+            }
+
+            if (paths.Count == 0)
+            {
+                UpdateStatus("Zwischenablage enth√§lt keine g√ºltigen Pfade.");
+                return;
+            }
+
+            var distinct = paths
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            AddPathsToBothLists(distinct);
+        }
+
+        private void AddPathsToBothLists(IEnumerable<string> paths)
+        {
+            var list = paths.ToList();
+            AddPathsTo(lstFiles, list, CamtExtensions);
+            AddPathsTo(lstCsvFiles, list, CsvExtensions);
         }
 
         // --------------------------------------------------------------------
-        // ‹berschreiben-Dialog
+        // √úberschreiben-Dialog
         // --------------------------------------------------------------------
 
         private bool HandleConflict(string outputPath)
         {
             var result = MessageBox.Show(
-                $"Die Datei existiert bereits:\n{outputPath}\n\n‹berschreiben?",
-                "Datei ¸berschreiben?",
+                $"Die Datei existiert bereits:\n{outputPath}\n\n√úberschreiben?",
+                "Datei √ºberschreiben?",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
             return result == DialogResult.Yes;
@@ -339,6 +371,29 @@ namespace CamtToMT940.Forms
                 string.Join("\n", errors),
                 "Fehler bei der Konvertierung",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        /// <summary>
+        /// Parst einen optionalen Betrag aus einem TextBox-Inhalt.
+        /// Leer ‚Üí null. Deutsche Schreibweise (Komma) wird unterst√ºtzt.
+        /// </summary>
+        private static decimal? ParseDecimalOrNull(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+
+            var cleaned = new string(text
+                .Where(c => char.IsDigit(c) || c == '.' || c == ',' || c == '-')
+                .ToArray());
+
+            var german = CultureInfo.GetCultureInfo("de-DE");
+            if (decimal.TryParse(cleaned, NumberStyles.Any, german, out var value))
+                return value;
+
+            var fallback = cleaned.Replace(".", "").Replace(",", ".");
+            if (decimal.TryParse(fallback, NumberStyles.Any, CultureInfo.InvariantCulture, out value))
+                return value;
+
+            return null;
         }
     }
 }
