@@ -17,13 +17,19 @@ namespace CamtToMT940.Services
         private readonly CultureInfo _german = CultureInfo.GetCultureInfo("de-DE");
         private readonly CultureInfo _invariant = CultureInfo.InvariantCulture;
 
+        /// <summary>
+        /// Konvertiert eine CSV-Datei in MT940. Optionaler Jahresfilter
+        /// (Buchungs- und Valuta-Datum) sowie UI-Overrides für IBAN,
+        /// BLZ/Konto und Salden.
+        /// </summary>
         public ConversionResult Convert(string sourcePath, CsvTemplate template,
             Func<string, bool>? onConflict = null,
             string? ibanOverride = null,
             string? blzOverride = null,
             string? kontoOverride = null,
             decimal? openingBalanceOverride = null,
-            decimal? closingBalanceOverride = null)
+            decimal? closingBalanceOverride = null,
+            int? yearFilter = null)
         {
             try
             {
@@ -32,7 +38,11 @@ namespace CamtToMT940.Services
 
                 var directory = Path.GetDirectoryName(sourcePath) ?? ".";
                 var baseName = Path.GetFileNameWithoutExtension(sourcePath);
-                var outputPath = Path.Combine(directory, baseName + ".txt");
+
+                // Ausgabename: bei Jahresfilter mit _{JJ}-Suffix
+                var outputPath = yearFilter.HasValue
+                    ? Path.Combine(directory, $"{baseName}_{yearFilter.Value % 100:D2}.txt")
+                    : Path.Combine(directory, baseName + ".txt");
 
                 if (File.Exists(outputPath) && onConflict != null)
                 {
@@ -62,6 +72,31 @@ namespace CamtToMT940.Services
                 if (rows.Count == 0)
                     return ConversionResult.Fail(sourcePath, "Keine Datenzeilen gefunden.");
 
+                // 3a. Jahresfilter auf Rohzeilen (vor dem Mappen), damit
+                //     latestRow und Salden automatisch gefiltert sind.
+                if (yearFilter.HasValue
+                    && template.Columns.BookingDate.HasValue
+                    && template.Columns.ValueDate.HasValue)
+                {
+                    var bookingCol = template.Columns.BookingDate.Value;
+                    var valueCol = template.Columns.ValueDate.Value;
+
+                    rows = rows.Where(row =>
+                    {
+                        var bookingStr = bookingCol < row.Length ? row[bookingCol] : null;
+                        var valueStr = valueCol < row.Length ? row[valueCol] : null;
+                        var bookingDate = ParseDate(bookingStr, template.DateFormat);
+                        var valueDate = ParseDate(valueStr, template.DateFormat);
+                        return bookingDate?.Year == yearFilter.Value
+                            && valueDate?.Year == yearFilter.Value;
+                    }).ToList();
+
+                    if (rows.Count == 0)
+                        return ConversionResult.Fail(sourcePath,
+                            $"Keine Buchungen im Jahr {yearFilter.Value} gefunden " +
+                            "(geprüft: Buchungs- und Valuta-Datum).");
+                }
+
                 // 3b. Eigene IBAN aus Datenzeile lesen, falls nicht im Header gefunden
                 if (string.IsNullOrWhiteSpace(ownIban) && template.OwnIbanDataColumn.HasValue)
                 {
@@ -74,13 +109,13 @@ namespace CamtToMT940.Services
                     }
                 }
 
-                // 3c. Eigene IBAN aus Dateinamen lesen, falls immer noch nicht gefunden
+                // 3c. Eigene IBAN aus Dateinamen lesen
                 if (string.IsNullOrWhiteSpace(ownIban) && template.OwnIbanFromFileName)
                 {
                     ownIban = ExtractIbanFromFileName(baseName);
                 }
 
-                // 3d. IBAN aus UI-Override (höchste Priorität, überschreibt alles)
+                // 3d. IBAN aus UI-Override (höchste Priorität)
                 string ibanSource = "(nicht gelesen)";
                 if (!string.IsNullOrWhiteSpace(ibanOverride))
                 {
@@ -88,7 +123,7 @@ namespace CamtToMT940.Services
                     ibanSource = "[aus UI]";
                 }
 
-                // 3e. IBAN aus BLZ + Kontonummer (UI bzw. Datenzeile) berechnen
+                // 3e. IBAN aus BLZ + Kontonummer berechnen (Mod-97)
                 if (string.IsNullOrWhiteSpace(ownIban) && !string.IsNullOrWhiteSpace(blzOverride))
                 {
                     string? konto = null;
@@ -118,7 +153,7 @@ namespace CamtToMT940.Services
                     }
                 }
 
-                // 3f. Wenn immer noch keine IBAN: harter Fehler (DATEV braucht :25:)
+                // 3f. Ohne IBAN kein DATEV-Import möglich
                 if (string.IsNullOrWhiteSpace(ownIban))
                 {
                     return ConversionResult.Fail(sourcePath,
@@ -126,10 +161,8 @@ namespace CamtToMT940.Services
                         "— ohne diese Angaben kann DATEV die Datei nicht zuordnen.");
                 }
 
-                // 4. Buchungen mappen
+                // 4. Buchungen mappen; latestRow für closingBalanceDataColumn merken
                 var transactions = new List<BankTransaction>();
-
-                // Für closingBalanceDataColumn: Rohzeile mit dem zeitlich größten BookingDate merken.
                 string[]? latestRow = null;
                 DateTime latestBookingDate = DateTime.MinValue;
 
@@ -152,11 +185,11 @@ namespace CamtToMT940.Services
                     return ConversionResult.Fail(sourcePath,
                         "Keine gültigen Buchungen erkannt (Template prüfen).");
 
-                // 5. Sortieren (aufsteigend nach Buchungsdatum)
+                // 5. Sortieren (aufsteigend nach Buchungsdatum für MT940)
                 if (template.SortTransactionsAscending)
                     transactions = transactions.OrderBy(t => t.BookingDate).ToList();
 
-                // 5b. Endsaldo aus Datenzeile lesen, falls nicht im Header gefunden.
+                // 5b. Endsaldo aus Datenzeile lesen, falls nicht im Header
                 if (closingBalance == null
                     && template.ClosingBalanceDataColumn.HasValue
                     && latestRow != null)
@@ -209,13 +242,14 @@ namespace CamtToMT940.Services
                 };
 
 #if DEBUG
-                // --- Debug ---
+                // Debug-Ausgabe (nur in Debug-Builds)
                 var debugPath = Path.Combine(directory, baseName + "_debug.txt");
                 File.WriteAllLines(debugPath, new[]
                 {
                     $"Template:         {template.Name}",
                     $"Header-Zeilen:    {template.HeaderRows}",
                     $"Eigene IBAN:      {ownIban} {ibanSource}",
+                    $"Jahresfilter:     {(yearFilter.HasValue ? yearFilter.Value.ToString() : "(keiner)")}",
                     $"Anfangssaldo:     {(openingBalance.HasValue ? openingBalance.Value.ToString("0.00") : "(nicht gelesen)")}" +
                         (openingBalanceOverride.HasValue ? " [aus UI]" : ""),
                     $"Endsaldo:         {(closingBalance.HasValue ? closingBalance.Value.ToString("0.00") : "(nicht gelesen)")}" +
@@ -240,7 +274,7 @@ namespace CamtToMT940.Services
                 File.WriteAllLines(debugPath, debugLines);
 #endif
 
-                // 8. MT940 schreiben
+                // 8. MT940 schreiben (ISO-8859-1)
                 var mt940 = _writer.Write(statement);
                 File.WriteAllText(outputPath, mt940, _writer.Encoding);
 
@@ -253,7 +287,7 @@ namespace CamtToMT940.Services
         }
 
         // --------------------------------------------------------------------
-        // Header-Parsing
+        // Header- und Datums-Parsing
         // --------------------------------------------------------------------
 
         private string? ReadHeaderField(string[] lines, int? row, int? col)
@@ -296,6 +330,21 @@ namespace CamtToMT940.Services
                 : null;
         }
 
+        /// <summary>Parst ein Datum mit dem Template-Format; Fallback auf deutsche Kultur.</summary>
+        private DateTime? ParseDate(string? input, string format)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return null;
+
+            if (DateTime.TryParseExact(input, format, _invariant,
+                DateTimeStyles.None, out var result))
+                return result;
+
+            if (DateTime.TryParse(input, _german, DateTimeStyles.None, out result))
+                return result;
+
+            return null;
+        }
+
         private static string? ExtractIbanFromFileName(string fileNameWithoutExtension)
         {
             if (string.IsNullOrWhiteSpace(fileNameWithoutExtension))
@@ -307,7 +356,7 @@ namespace CamtToMT940.Services
 
         /// <summary>
         /// Baut aus BLZ (8 Ziffern) und Kontonummer (max. 10 Ziffern) eine
-        /// deutsche IBAN. Verwendet Mod-97 mit BigInteger (24-stellige Zahl).
+        /// deutsche IBAN (Mod-97 mit BigInteger).
         /// </summary>
         private static string BuildIbanFromBlzKonto(string blz, string konto)
         {

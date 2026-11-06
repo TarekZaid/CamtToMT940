@@ -29,16 +29,13 @@
 
         /// <summary>
         /// Spaltenindex in den DATENZEILEN, der die eigene IBAN enthält
-        /// (z.B. Sparkasse: Spalte 0 "Auftragskonto"). Wird nur verwendet,
-        /// wenn OwnIbanRow/OwnIbanColumn nicht gesetzt sind.
+        /// Wird nur verwendet, wenn OwnIbanRow/OwnIbanColumn nicht gesetzt sind.
         /// </summary>
         public int? OwnIbanDataColumn { get; set; }
 
         /// <summary>
         /// Wenn true, wird die eigene IBAN aus dem Dateinamen extrahiert,
         /// falls sie weder im Header noch in den Datenzeilen gefunden wurde.
-        /// Sucht nach deutschem IBAN-Muster: DE + 20 Ziffern.
-        /// (z.B. DKB-Umsatzlisten: "..._DE27120300000000000000.csv")
         /// </summary>
         public bool OwnIbanFromFileName { get; set; } = false;
 

@@ -149,6 +149,11 @@ namespace CamtToMT940.Forms
             decimal? openingOverride = ParseDecimalOrNull(txtOpening.Text);
             decimal? closingOverride = ParseDecimalOrNull(txtClosing.Text);
 
+            // Jahresfilter (0 = "(alle Jahre)")
+            int? yearFilter = null;
+            if (cmbYear.SelectedIndex > 0 && cmbYear.SelectedItem is int year)
+                yearFilter = year;
+
             var inputs = lstCsvFiles.Items.Cast<FileEntry>()
                 .Select(x => x.FullPath).ToList();
 
@@ -160,7 +165,7 @@ namespace CamtToMT940.Forms
             foreach (var input in inputs)
             {
                 var result = _csvConverter.Convert(input, template, HandleConflict,
-                    iban, blz, konto, openingOverride, closingOverride);
+                    iban, blz, konto, openingOverride, closingOverride, yearFilter);
 
                 if (result.Success)
                 {
@@ -373,10 +378,7 @@ namespace CamtToMT940.Forms
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
-        /// <summary>
-        /// Parst einen optionalen Betrag aus einem TextBox-Inhalt.
-        /// Leer → null. Deutsche Schreibweise (Komma) wird unterstützt.
-        /// </summary>
+        /// <summary>Parst einen optionalen Betrag aus einem TextBox-Inhalt (leer = null).</summary>
         private static decimal? ParseDecimalOrNull(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return null;

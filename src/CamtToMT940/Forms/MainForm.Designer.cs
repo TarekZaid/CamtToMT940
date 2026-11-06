@@ -31,6 +31,8 @@
             groupBoxCsvInput = new GroupBox();
             lblTemplate = new Label();
             cmbTemplates = new ComboBox();
+            lblYear = new Label();
+            cmbYear = new ComboBox();
             btnCsvConvert = new Button();
             btnCsvClear = new Button();
             btnCsvSelectFolder = new Button();
@@ -288,6 +290,8 @@
             groupBoxManualInput.Controls.Add(txtOpening);
             groupBoxManualInput.Controls.Add(lblClosing);
             groupBoxManualInput.Controls.Add(txtClosing);
+            groupBoxManualInput.Controls.Add(lblYear);
+            groupBoxManualInput.Controls.Add(cmbYear);
             groupBoxManualInput.Dock = DockStyle.Fill;
             groupBoxManualInput.Location = new Point(0, 0);
             groupBoxManualInput.Name = "groupBoxManualInput";
@@ -351,6 +355,24 @@
             txtClosing.Name = "txtClosing";
             txtClosing.Size = new Size(294, 27);
             txtClosing.PlaceholderText = "z.B. 2345,67 (überschreibt Datei-Wert)";
+
+            lblYear.AutoSize = true;
+            lblYear.Location = new Point(15, 275);
+            lblYear.Name = "lblYear";
+            lblYear.Text = "Nur Jahr:";
+
+            cmbYear.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            cmbYear.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbYear.FormattingEnabled = true;
+            cmbYear.Location = new Point(15, 298);
+            cmbYear.Name = "cmbYear";
+            cmbYear.Size = new Size(294, 28);
+
+            // Feste Jahresliste für den optionalen Jahresfilter
+            cmbYear.Items.Add("(alle Jahre)");
+            for (int y = 2020; y <= 2030; y++)
+                cmbYear.Items.Add(y);
+            cmbYear.SelectedIndex = 0;
 
             // ----------------------------------------------------------------
             // statusStrip
@@ -443,6 +465,8 @@
         private TextBox txtOpening;
         private Label lblClosing;
         private TextBox txtClosing;
+        private Label lblYear;
+        private ComboBox cmbYear;
 
         // Status
         private StatusStrip statusStrip;
