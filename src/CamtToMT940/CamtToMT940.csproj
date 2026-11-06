@@ -19,8 +19,6 @@
 		<PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
 	</ItemGroup>
 	<ItemGroup>
-		<None Update="templates\**\*.json">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
+		<EmbeddedResource Include="templates\*.json" />
 	</ItemGroup>
 </Project>
